@@ -188,7 +188,7 @@ class SyncService {
   private cleanPayloadForSupabase(tabla: string, data: any): any {
     const cleaned: any = {};
     const tableSchemas: Record<string, string[]> = {
-      sedes: ['id', 'nombre'],
+      sedes: ['id', 'nombre', 'negocio_id', 'rut', 'direccion'],
       productos: ['id', 'sede_id', 'codigo_barras', 'nombre', 'categoria', 'precio_compra', 'precio_venta', 'stock_actual', 'stock_minimo', 'tiene_receta', 'receta'],
       insumos: ['id', 'sede_id', 'nombre', 'unidad', 'stock_actual', 'stock_minimo', 'costo_unitario'],
       mesas: ['id', 'sede_id', 'numero_mesa', 'estado', 'cliente_nombre', 'consumos', 'updated_at'],

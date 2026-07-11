@@ -209,7 +209,7 @@ export default function SuperAdminPage() {
       });
 
       // B. Registrar el Usuario Administrador de ese Negocio
-      const generatedEmail = `admin@${cleanSubdominio}.com`;
+      const generatedEmail = newAdminEmail.trim() || `admin@${cleanSubdominio}.com`;
       const usuario = mockDb.addUsuario({
         negocio_id: negocio.id,
         email: generatedEmail,
@@ -886,9 +886,11 @@ export default function SuperAdminPage() {
                         value={newNegocioNombre}
                         onChange={(e) => {
                           setNewNegocioNombre(e.target.value);
-                          // Sugerir subdominio automáticamente al escribir
+                          // Sugerir subdominio y correo automáticamente al escribir
                           if (!newNegocioSubdominio) {
-                            setNewNegocioSubdominio(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                            const clean = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            setNewNegocioSubdominio(clean);
+                            setNewAdminEmail(`admin@${clean}.com`);
                           }
                         }}
                         placeholder="Ej. Nexus Gastrobar Sur"
@@ -907,6 +909,7 @@ export default function SuperAdminPage() {
                         onChange={(e) => {
                           const clean = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
                           setNewNegocioSubdominio(clean);
+                          setNewAdminEmail(`admin@${clean}.com`);
                         }}
                         placeholder="Ej. nexus"
                         className="w-full h-9 px-3 rounded-lg glass-input text-xs text-white font-mono"
@@ -962,11 +965,16 @@ export default function SuperAdminPage() {
 
                     <div>
                       <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1 pl-1">
-                        Email de Ingreso (Autogenerado)
+                        Email de Ingreso * (Autogenerado / Editable)
                       </label>
-                      <div className="w-full h-9 px-3 rounded-lg glass-input text-xs text-zinc-400 font-mono flex items-center bg-black/40 border border-white/5 select-all">
-                        {newNegocioSubdominio ? `admin@${newNegocioSubdominio.toLowerCase().replace(/[^a-z0-9]/g, '')}.com` : 'admin@<subdominio>.com'}
-                      </div>
+                      <input
+                        type="email"
+                        required
+                        value={newAdminEmail}
+                        onChange={(e) => setNewAdminEmail(e.target.value)}
+                        placeholder="admin@tu-subdominio.com"
+                        className="w-full h-9 px-3 rounded-lg glass-input text-xs text-white font-mono"
+                      />
                     </div>
 
                     <div>
