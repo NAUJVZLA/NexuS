@@ -36,6 +36,20 @@ BEGIN
     ) THEN
         ALTER TABLE sedes ADD COLUMN negocio_id VARCHAR(100);
     END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='sedes' AND column_name='rut'
+    ) THEN
+        ALTER TABLE sedes ADD COLUMN rut VARCHAR(100) DEFAULT '';
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='sedes' AND column_name='direccion'
+    ) THEN
+        ALTER TABLE sedes ADD COLUMN direccion VARCHAR(200) DEFAULT '';
+    END IF;
 END $$;
 
 -- Asegurar relaciones en Cascada (ON DELETE CASCADE)
