@@ -55,8 +55,8 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO usuarios (id, negocio_id, email, nombre, password, rol)
 VALUES 
-  ('usr-super', NULL, 'superadmin@alcobar.com', 'Juan Carlos Caridad', 'jccg2105@.**', 'super_admin'),
-  ('usr-admin', 'negocio-defecto', 'admin@alcobar.com', 'Administrador', 'admin123', 'admin')
+  ('usr-super', NULL, 'superadmin@nexusaas.com', 'Juan Carlos Caridad', 'jccg2105@.**', 'super_admin'),
+  ('usr-admin', 'negocio-defecto', 'admin@nexusaas.com', 'Administrador', 'admin123', 'admin')
 ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password;
 
 -- Asociar las sedes iniciales al negocio por defecto si existen

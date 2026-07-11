@@ -359,8 +359,8 @@ const INITIAL_NEGOCIOS: Negocio[] = [
 ];
 
 const INITIAL_USUARIOS: Usuario[] = [
-  { id: 'usr-super', email: 'superadmin@alcobar.com', nombre: 'Juan Carlos Caridad', password: 'jccg2105@.**', rol: 'super_admin' },
-  { id: 'usr-admin', negocio_id: 'negocio-defecto', email: 'admin@alcobar.com', nombre: 'Administrador', password: 'admin123', rol: 'admin' }
+  { id: 'usr-super', email: 'superadmin@nexusaas.com', nombre: 'Juan Carlos Caridad', password: 'jccg2105@.**', rol: 'super_admin' },
+  { id: 'usr-admin', negocio_id: 'negocio-defecto', email: 'admin@nexusaas.com', nombre: 'Administrador', password: 'admin123', rol: 'admin' }
 ];
 
 const INITIAL_SEDES: Sede[] = [
