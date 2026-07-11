@@ -136,6 +136,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           setActiveSede(def);
           localStorage.setItem('alico_active_sede', def);
         }
+        
+        // Disparar evento para alertar a todos los componentes hijos que recarguen sus datos
+        window.dispatchEvent(new Event('sedeChanged'));
       }
     });
 
