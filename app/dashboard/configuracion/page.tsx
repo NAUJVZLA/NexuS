@@ -20,6 +20,15 @@ export default function SedeConfigPage() {
   const [passSuccessMsg, setPassSuccessMsg] = useState('');
   const [passErrorMsg, setPassErrorMsg] = useState('');
 
+  // Estados para Gestión de Sedes
+  const [sedesList, setSedesList] = useState<Sede[]>([]);
+  const [showAddSedeModal, setShowAddSedeModal] = useState(false);
+  const [newSedeNombre, setNewSedeNombre] = useState('');
+  const [newSedeRut, setNewSedeRut] = useState('');
+  const [newSedeDireccion, setNewSedeDireccion] = useState('');
+  const [sedeSuccessMsg, setSedeSuccessMsg] = useState('');
+  const [sedeErrorMsg, setSedeErrorMsg] = useState('');
+
   const loadSedeConfig = () => {
     setLoading(true);
     setErrorMsg('');
@@ -28,17 +37,7 @@ export default function SedeConfigPage() {
       const currentSedeId = localStorage.getItem('alico_active_sede') || 'sede-norte';
       setActiveSedeId(currentSedeId);
 
-      const sedes = mockDb.getSedes();
-      const currentSede = sedes.find(s => s.id === currentSedeId);
-      if (currentSede) {
-        setNombre(currentSede.nombre || '');
-        setRut(currentSede.rut || '');
-        setDireccion(currentSede.direccion || '');
-      } else {
-        setErrorMsg('Sede no encontrada. Intente cambiar de sede o verifique su conexión.');
-      }
-
-      // Cargar usuario actual desde sesión
+      // Cargar usuario actual desde sesión primero para filtrar sedes
       const sessionStr = localStorage.getItem('alico_session');
       if (sessionStr) {
         const session = JSON.parse(sessionStr);
@@ -46,6 +45,20 @@ export default function SedeConfigPage() {
         const found = users.find(u => u.id === session.id);
         if (found) {
           setCurrentUser(found);
+          
+          // Cargar sedes asociadas al negocio
+          const businessSedes = mockDb.getSedes(session.negocio_id);
+          setSedesList(businessSedes);
+        }
+
+        const sedes = mockDb.getSedes();
+        const currentSede = sedes.find(s => s.id === currentSedeId);
+        if (currentSede) {
+          setNombre(currentSede.nombre || '');
+          setRut(currentSede.rut || '');
+          setDireccion(currentSede.direccion || '');
+        } else {
+          setErrorMsg('Sede no encontrada. Intente cambiar de sede o verifique su conexión.');
         }
       }
     } catch (err) {
@@ -140,6 +153,89 @@ export default function SedeConfigPage() {
       }
     } catch (err: any) {
       setPassErrorMsg(err.message || 'Error al cambiar la contraseña.');
+    }
+  };
+
+  const handleCreateSede = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSedeErrorMsg('');
+    setSedeSuccessMsg('');
+
+    if (!newSedeNombre.trim()) {
+      setSedeErrorMsg('El nombre de la sede es requerido.');
+      return;
+    }
+
+    if (!currentUser || !currentUser.negocio_id) {
+      setSedeErrorMsg('Sesión no válida.');
+      return;
+    }
+
+    try {
+      const created = mockDb.addSede({
+        negocio_id: currentUser.negocio_id,
+        nombre: newSedeNombre.trim(),
+        rut: newSedeRut.trim(),
+        direccion: newSedeDireccion.trim()
+      });
+
+      if (created) {
+        setSedeSuccessMsg(`¡Sede "${newSedeNombre}" creada con éxito!`);
+        setNewSedeNombre('');
+        setNewSedeRut('');
+        setNewSedeDireccion('');
+        
+        // Recargar sedes
+        const businessSedes = mockDb.getSedes(currentUser.negocio_id);
+        setSedesList(businessSedes);
+
+        // Disparar evento para que el layout actualice el select
+        window.dispatchEvent(new Event('sedeChanged'));
+
+        setTimeout(() => {
+          setShowAddSedeModal(false);
+          setSedeSuccessMsg('');
+        }, 1500);
+      } else {
+        setSedeErrorMsg('No se pudo crear la sede.');
+      }
+    } catch (err: any) {
+      setSedeErrorMsg(err.message || 'Error al crear la sede.');
+    }
+  };
+
+  const handleDeleteSede = (id: string, nombreSede: string) => {
+    setSedeErrorMsg('');
+    setSedeSuccessMsg('');
+
+    if (id === activeSedeId) {
+      setSedeErrorMsg('No puedes eliminar la sede en la que estás trabajando actualmente. Cambia de sede en el menú lateral primero.');
+      setTimeout(() => setSedeErrorMsg(''), 5000);
+      return;
+    }
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente la sede "${nombreSede}"?\nSe borrarán todas las mesas, inventarios, movimientos y ventas vinculados.`)) {
+      return;
+    }
+
+    try {
+      const deleted = mockDb.deleteSede(id);
+      if (deleted) {
+        setSedeSuccessMsg(`¡Sede "${nombreSede}" eliminada con éxito!`);
+        
+        // Recargar sedes
+        const businessSedes = mockDb.getSedes(currentUser.negocio_id);
+        setSedesList(businessSedes);
+
+        // Disparar evento para actualizar sidebar
+        window.dispatchEvent(new Event('sedeChanged'));
+        
+        setTimeout(() => setSedeSuccessMsg(''), 4000);
+      } else {
+        setSedeErrorMsg('No se pudo eliminar la sede.');
+      }
+    } catch (err: any) {
+      setSedeErrorMsg(err.message || 'Error al eliminar la sede.');
     }
   };
 
@@ -258,6 +354,181 @@ export default function SedeConfigPage() {
           </div>
         </form>
       </div>
+
+      {/* CARD: GESTIÓN DE SEDES (SUCURSALES) */}
+      <div className="glass-card rounded-2xl p-6 border border-white/5 relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/50 to-transparent"></div>
+
+        <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-5">
+          <h3 className="text-xs font-black text-white uppercase tracking-widest">
+            Gestión de Sedes (Sucursales)
+          </h3>
+          <button
+            type="button"
+            onClick={() => setShowAddSedeModal(true)}
+            className="h-7 px-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-black font-bold text-[10px] uppercase tracking-wider transition-all flex items-center gap-1"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Crear Sede
+          </button>
+        </div>
+
+        {sedeSuccessMsg && (
+          <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-emerald-300 text-xs font-semibold mb-5 animate-fade-in">
+            {sedeSuccessMsg}
+          </div>
+        )}
+
+        {sedeErrorMsg && (
+          <div className="p-3.5 rounded-xl bg-red-950/20 border border-red-500/20 text-red-300 text-xs font-semibold mb-5 animate-fade-in">
+            {sedeErrorMsg}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {sedesList.map((s) => (
+            <div
+              key={s.id}
+              className={`p-4 rounded-xl border relative overflow-hidden flex flex-col justify-between min-h-[120px] transition-all bg-[#0a0a14] ${
+                s.id === activeSedeId
+                  ? 'border-amber-500/35 shadow-lg shadow-amber-500/5'
+                  : 'border-white/5 hover:border-white/10'
+              }`}
+            >
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h4 className="text-sm font-bold text-white leading-tight">{s.nombre}</h4>
+                  {s.id === activeSedeId && (
+                    <span className="h-5 px-2 rounded-full bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold uppercase tracking-wider text-amber-400 flex items-center">
+                      Activa
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">RUT: {s.rut || 'No especificado'}</p>
+                <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">{s.direccion || 'Sin dirección registrada'}</p>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-white/5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSede(s.id, s.nombre)}
+                  className={`h-7 px-2.5 rounded-lg font-bold text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 ${
+                    s.id === activeSedeId
+                      ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                      : 'bg-red-950/20 hover:bg-red-900/20 border border-red-900/40 text-red-400'
+                  }`}
+                  disabled={s.id === activeSedeId}
+                  title={s.id === activeSedeId ? 'No puedes borrar tu sede de trabajo activa' : 'Eliminar esta sucursal'}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-3.5 h-3.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                  </svg>
+                  Borrar Sede
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* MODAL: REGISTRAR NUEVA SEDE */}
+      {showAddSedeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="glass-card border border-white/5 rounded-3xl p-6 md:p-8 w-full max-w-md relative overflow-hidden bg-[#06060c]/95 shadow-2xl">
+            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500 to-transparent"></div>
+
+            <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-6">
+              <h3 className="text-sm font-black text-white uppercase tracking-widest">
+                Registrar Nueva Sede
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddSedeModal(false)}
+                className="text-zinc-500 hover:text-zinc-300"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {sedeErrorMsg && (
+              <div className="p-3 rounded-xl bg-red-950/20 border border-red-500/20 text-red-300 text-xs font-semibold mb-5">
+                {sedeErrorMsg}
+              </div>
+            )}
+
+            {sedeSuccessMsg && (
+              <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-emerald-300 text-xs font-semibold mb-5">
+                {sedeSuccessMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateSede} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 pl-1">
+                  Nombre de la Sede *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newSedeNombre}
+                  onChange={(e) => setNewSedeNombre(e.target.value)}
+                  placeholder="Ej. NexuS Sucursal Sur"
+                  className="w-full h-10 px-3.5 rounded-xl glass-input text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 pl-1">
+                  RUT / NIT (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={newSedeRut}
+                  onChange={(e) => setNewSedeRut(e.target.value)}
+                  placeholder="Ej. 901.234.567-2"
+                  className="w-full h-10 px-3.5 rounded-xl glass-input text-xs text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 pl-1">
+                  Dirección (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={newSedeDireccion}
+                  onChange={(e) => setNewSedeDireccion(e.target.value)}
+                  placeholder="Ej. Calle 50 #12-45"
+                  className="w-full h-10 px-3.5 rounded-xl glass-input text-xs text-white"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-white/5 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddSedeModal(false)}
+                  className="h-10 px-4 rounded-xl border border-white/10 hover:bg-white/5 text-zinc-400 font-bold text-xs transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="h-10 px-6 rounded-xl btn-gold font-bold text-xs shadow-lg shadow-amber-500/10 transition-all flex items-center gap-1.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  Crear Sede
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Card de Cambio de Contraseña de Autoservicio */}
       {currentUser && (

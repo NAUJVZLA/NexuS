@@ -142,34 +142,15 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- ==============================================================
--- POLÍTICAS DE RLS PARA SAAS (NEGOCIOS Y USUARIOS)
+-- DESHABILITAR RLS PARA PERMITIR OPERAR CON EL ROL PUBLIC/ANON
 -- ==============================================================
 
-ALTER TABLE negocios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
+-- Desactivar RLS en negocios y usuarios
+ALTER TABLE negocios DISABLE ROW LEVEL SECURITY;
+ALTER TABLE usuarios DISABLE ROW LEVEL SECURITY;
 
--- Limpieza preventiva de políticas
+-- Limpieza preventiva de políticas antiguas
 DROP POLICY IF EXISTS "Negocios visibles por todos (para login/subdominio)" ON negocios;
 DROP POLICY IF EXISTS "Super Admins tienen control total sobre negocios" ON negocios;
 DROP POLICY IF EXISTS "Usuarios legibles por su propio negocio o super_admin" ON usuarios;
 DROP POLICY IF EXISTS "Super Admins y Admins locales editan usuarios" ON usuarios;
-
--- Políticas de Negocios
-CREATE POLICY "Negocios visibles por todos (para login/subdominio)" ON negocios
-    FOR SELECT USING (true);
-
-CREATE POLICY "Super Admins tienen control total sobre negocios" ON negocios
-    FOR ALL USING (public.es_super_admin());
-
--- Políticas de Usuarios
-CREATE POLICY "Usuarios legibles por su propio negocio o super_admin" ON usuarios
-    FOR SELECT USING (true);
-
-CREATE POLICY "Super Admins y Admins locales editan usuarios" ON usuarios
-    FOR ALL USING (
-        public.es_super_admin()
-        OR (
-            negocio_id = public.obtener_mi_negocio_id()
-            AND public.es_admin_local()
-        )
-    );

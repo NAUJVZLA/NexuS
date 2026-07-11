@@ -1108,6 +1108,9 @@ export const mockDb = {
         setLocalStorage('alico_sedes', memoryDb.sedes);
       }
 
+      // Propagar el borrado a Supabase y IndexedDB (las tablas relacionadas se borrarán por ON DELETE CASCADE)
+      persistAndSync('sedes', sedeId, 'DELETE', null);
+
       memoryDb.mesas = memoryDb.mesas.filter(m => m.sede_id !== sedeId);
       memoryDb.productos = memoryDb.productos.filter(p => p.sede_id !== sedeId);
       memoryDb.insumos = memoryDb.insumos.filter(i => i.sede_id !== sedeId);
