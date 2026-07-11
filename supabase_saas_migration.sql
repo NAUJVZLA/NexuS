@@ -107,55 +107,73 @@ CREATE TRIGGER on_auth_user_created
 
 
 -- ==============================================================
+-- FUNCIONES DE SEGURIDAD (SECURITY DEFINER)
+-- Evitan la recursión infinita en las políticas RLS
+-- ==============================================================
+
+CREATE OR REPLACE FUNCTION public.es_super_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.usuarios 
+        WHERE id = auth.uid()::text AND rol = 'super_admin'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.obtener_mi_negocio_id()
+RETURNS VARCHAR AS $$
+BEGIN
+    RETURN (
+        SELECT negocio_id FROM public.usuarios 
+        WHERE id = auth.uid()::text
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.es_admin_local()
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.usuarios 
+        WHERE id = auth.uid()::text AND rol = 'admin'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ==============================================================
 -- POLÍTICAS DE RLS PARA SAAS (NEGOCIOS Y USUARIOS)
 -- ==============================================================
 
 ALTER TABLE negocios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 
+-- Limpieza preventiva de políticas
+DROP POLICY IF EXISTS "Negocios visibles por todos (para login/subdominio)" ON negocios;
+DROP POLICY IF EXISTS "Super Admins tienen control total sobre negocios" ON negocios;
+DROP POLICY IF EXISTS "Usuarios legibles por su propio negocio o super_admin" ON usuarios;
+DROP POLICY IF EXISTS "Super Admins y Admins locales editan usuarios" ON usuarios;
+
 -- Políticas de Negocios
 CREATE POLICY "Negocios visibles por todos (para login/subdominio)" ON negocios
     FOR SELECT USING (true);
 
 CREATE POLICY "Super Admins tienen control total sobre negocios" ON negocios
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM usuarios 
-            WHERE usuarios.id = auth.uid()::text AND usuarios.rol = 'super_admin'
-        )
-    );
+    FOR ALL USING (public.es_super_admin());
 
 -- Políticas de Usuarios
 CREATE POLICY "Usuarios legibles por su propio negocio o super_admin" ON usuarios
     FOR SELECT USING (
-        -- Si es super_admin
-        EXISTS (
-            SELECT 1 FROM usuarios 
-            WHERE usuarios.id = auth.uid()::text AND usuarios.rol = 'super_admin'
-        )
-        -- O si pertenece al mismo negocio
-        OR negocio_id = (
-            SELECT u.negocio_id FROM usuarios u 
-            WHERE u.id = auth.uid()::text
-        )
+        public.es_super_admin()
+        OR negocio_id = public.obtener_mi_negocio_id()
     );
 
 CREATE POLICY "Super Admins y Admins locales editan usuarios" ON usuarios
     FOR ALL USING (
-        -- Super Admin
-        EXISTS (
-            SELECT 1 FROM usuarios 
-            WHERE usuarios.id = auth.uid()::text AND usuarios.rol = 'super_admin'
-        )
-        -- Admin local del negocio
+        public.es_super_admin()
         OR (
-            negocio_id = (
-                SELECT u.negocio_id FROM usuarios u 
-                WHERE u.id = auth.uid()::text
-            )
-            AND EXISTS (
-                SELECT 1 FROM usuarios u 
-                WHERE u.id = auth.uid()::text AND u.rol = 'admin'
-            )
+            negocio_id = public.obtener_mi_negocio_id()
+            AND public.es_admin_local()
         )
     );
