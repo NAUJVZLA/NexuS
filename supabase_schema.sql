@@ -152,7 +152,7 @@ CREATE TABLE cierres (
 -- 12. TABLA AUDITORIA (Historial de Auditoría)
 CREATE TABLE auditoria (
     id VARCHAR(100) PRIMARY KEY DEFAULT uuid_generate_v4()::text,
-    sede_id VARCHAR(100) NOT NULL REFERENCES sedes(id) ON DELETE CASCADE,
+    sede_id VARCHAR(100) REFERENCES sedes(id) ON DELETE CASCADE,
     usuario VARCHAR(100) NOT NULL,
     accion VARCHAR(100) NOT NULL,
     detalle TEXT NOT NULL,

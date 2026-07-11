@@ -212,6 +212,11 @@ class SyncService {
       sourceData.desconto_stock = sourceData.descontó_stock;
     }
 
+    // Si es auditoría y la sede es global-system, mapear a null para evitar violar la FK
+    if (tabla === 'auditoria' && sourceData.sede_id === 'global-system') {
+      sourceData.sede_id = null;
+    }
+
     // Filtrar solo las columnas válidas de la tabla en Supabase
     for (const key of validColumns) {
       if (key in sourceData) {
