@@ -44,11 +44,9 @@ ALTER TABLE sedes ADD CONSTRAINT sedes_negocio_id_fkey FOREIGN KEY (negocio_id) 
 
 ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_negocio_id_fkey;
 ALTER TABLE usuarios ADD CONSTRAINT usuarios_negocio_id_fkey FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE;
--- 4. Habilitar tiempo real para las nuevas tablas (seguro contra ejecuciones repetidas)
-ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS negocios;
-ALTER PUBLICATION supabase_realtime DROP TABLE IF EXISTS usuarios;
-ALTER PUBLICATION supabase_realtime ADD TABLE negocios;
-ALTER PUBLICATION supabase_realtime ADD TABLE usuarios;
+-- 4. Habilitar tiempo real para las nuevas tablas (comentado porque ya se agregaron previamente)
+-- ALTER PUBLICATION supabase_realtime ADD TABLE negocios;
+-- ALTER PUBLICATION supabase_realtime ADD TABLE usuarios;
 
 -- 5. Sembrar un Negocio y Usuario administrador inicial de prueba (opcional)
 INSERT INTO negocios (id, nombre, subdominio, rut, direccion, plan_activo, estado_suscripcion, fecha_vencimiento)
