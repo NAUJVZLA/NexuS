@@ -99,6 +99,8 @@ export default function LoginPage() {
 
     setTimeout(() => {
       const users = mockDb.getUsuarios();
+      console.log("🔍 [Login Debug] Usuarios cargados:", users);
+      console.log("🔍 [Login Debug] Contraseña ingresada:", profilePassword);
       let foundUser = null;
 
       if (selectedProfileForPass === 'super') {
