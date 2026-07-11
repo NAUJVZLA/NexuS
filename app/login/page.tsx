@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { mockDb } from '@/lib/supabaseClient';
+import { mockDb, ensureDbInitialized } from '@/lib/supabaseClient';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,6 +37,11 @@ export default function LoginPage() {
       if (!cachedSuperPass || cachedSuperPass === 'jccg2105' || cachedSuperPass === 'jccg2105.') {
         localStorage.setItem('alico_super_password', 'jccg2105@.**');
       }
+
+      // Asegurar que cargamos de Supabase en caliente la base de datos (con las claves y usuarios actuales)
+      ensureDbInitialized().catch(err => {
+        console.error("❌ [Login] Error cargando usuarios de Supabase:", err);
+      });
     }
   }, []);
 
