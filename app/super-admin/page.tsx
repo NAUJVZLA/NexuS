@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { mockDb, Sede, Venta, Producto, CreditoCliente, CierreCaja, PrestamoBotella, getMockData, supabase, isMockMode, Negocio, Usuario, ensureDbInitialized } from '@/lib/supabaseClient';
+import { mockDb, Sede, Mesa, Venta, Producto, CreditoCliente, CierreCaja, PrestamoBotella, getMockData, supabase, isMockMode, Negocio, Usuario, ensureDbInitialized } from '@/lib/supabaseClient';
 
 export default function SuperAdminPage() {
   const router = useRouter();
@@ -184,7 +184,7 @@ export default function SuperAdminPage() {
   };
 
   // 1. CREAR NUEVO CLIENTE SAAS (Negocio + Sede + Admin)
-  const handleCreateClienteSaaS = (e: React.FormEvent) => {
+  const handleCreateClienteSaaS = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -203,44 +203,79 @@ export default function SuperAdminPage() {
         return;
       }
 
-      // A. Registrar el Negocio
-      const negocio = mockDb.addNegocio({
+      const negocioId = 'negocio-' + Date.now();
+      const usuarioId = 'usr-' + Date.now();
+      const sedeId = 'sede-' + Date.now();
+
+      const newNegocio: Negocio = {
+        id: negocioId,
         nombre: newNegocioNombre.trim(),
         subdominio: cleanSubdominio,
         rut: newNegocioRut.trim(),
-        direccion: newNegocioDireccion.trim()
-      });
+        direccion: newNegocioDireccion.trim(),
+        plan_activo: 'Básico',
+        estado_suscripcion: 'ACTIVO',
+        fecha_vencimiento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 30 días
+      };
 
-      // B. Registrar el Usuario Administrador de ese Negocio
       const generatedEmail = newAdminEmail.trim() || `admin@${cleanSubdominio}.com`;
-      const usuario = mockDb.addUsuario({
-        negocio_id: negocio.id,
+      const newUsuario: Usuario = {
+        id: usuarioId,
+        negocio_id: negocioId,
         email: generatedEmail,
         nombre: newAdminNombre.trim(),
         password: newAdminPassword.trim(),
         rol: 'admin'
-      });
+      };
 
-      // C. Crear Sede Principal del Negocio
-      const sede = mockDb.addSede({
-        negocio_id: negocio.id,
-        nombre: `Sede Principal - ${negocio.nombre}`,
-        rut: negocio.rut,
-        direccion: negocio.direccion
-      });
+      const newSede: Sede = {
+        id: sedeId,
+        negocio_id: negocioId,
+        nombre: `Sede Principal - ${newNegocio.nombre}`,
+        rut: newNegocio.rut || '',
+        direccion: newNegocio.direccion || ''
+      };
 
-      // D. Crear mesas por defecto para la nueva sede
-      const allMesas = mockDb.getMesas();
-      const defaultMesas = [
-        { id: 'm-' + Date.now() + '-1', sede_id: sede.id, numero_mesa: 'Mesa 1', estado: 'DISPONIBLE' as const, cliente_nombre: '', consumos: [] },
-        { id: 'm-' + Date.now() + '-2', sede_id: sede.id, numero_mesa: 'Mesa 2', estado: 'DISPONIBLE' as const, cliente_nombre: '', consumos: [] },
-        { id: 'm-' + Date.now() + '-3', sede_id: sede.id, numero_mesa: 'Mesa 3', estado: 'DISPONIBLE' as const, cliente_nombre: '', consumos: [] },
-        { id: 'm-' + Date.now() + '-4', sede_id: sede.id, numero_mesa: 'Barra Asientos', estado: 'DISPONIBLE' as const, cliente_nombre: '', consumos: [] }
+      const defaultMesas: Mesa[] = [
+        { id: 'm-' + Date.now() + '-1', sede_id: sedeId, numero_mesa: 'Mesa 1', estado: 'DISPONIBLE' as const, cliente_nombre: '', consumos: [] },
+        { id: 'm-' + Date.now() + '-2', sede_id: sedeId, numero_mesa: 'Mesa 2', estado: 'DISPONIBLE' as const, cliente_nombre: '', consumos: [] },
+        { id: 'm-' + Date.now() + '-3', sede_id: sedeId, numero_mesa: 'Mesa 3', estado: 'DISPONIBLE' as const, cliente_nombre: '', consumos: [] },
+        { id: 'm-' + Date.now() + '-4', sede_id: sedeId, numero_mesa: 'Barra Asientos', estado: 'DISPONIBLE' as const, cliente_nombre: '', consumos: [] }
       ];
-      localStorage.setItem('alico_mesas', JSON.stringify([...allMesas, ...defaultMesas]));
+
+      // 1. Si no es modo mock, insertar secuencialmente en Supabase con await para garantizar la integridad referencial
+      if (!isMockMode && supabase) {
+        // A. Registrar Negocio
+        const { error: negErr } = await supabase.from('negocios').insert(newNegocio);
+        if (negErr) throw negErr;
+
+        // B. Registrar Usuario Administrador
+        const { error: usrErr } = await supabase.from('usuarios').insert(newUsuario);
+        if (usrErr) throw usrErr;
+
+        // C. Registrar Sede Principal
+        const { error: sedeErr } = await supabase.from('sedes').insert(newSede);
+        if (sedeErr) throw sedeErr;
+
+        // D. Registrar Mesas por defecto
+        const { error: mesasErr } = await supabase.from('mesas').insert(defaultMesas);
+        if (mesasErr) throw mesasErr;
+      }
+
+      // 2. Actualizar memoria local (memoryDb) y localStorage
+      const data = getMockData();
+      data.negocios.push(newNegocio);
+      data.usuarios.push(newUsuario);
+      data.sedes.push(newSede);
+      data.mesas.push(...defaultMesas);
+
+      localStorage.setItem('alico_negocios', JSON.stringify(data.negocios));
+      localStorage.setItem('alico_usuarios', JSON.stringify(data.usuarios));
+      localStorage.setItem('alico_sedes', JSON.stringify(data.sedes));
+      localStorage.setItem('alico_mesas', JSON.stringify(data.mesas));
 
       setSuccessMsg(`¡Cliente SaaS "${newNegocioNombre}" registrado con éxito! Acceso: ${generatedEmail}`);
-      
+
       // Limpiar Formulario
       setNewNegocioNombre('');
       setNewNegocioSubdominio('');
