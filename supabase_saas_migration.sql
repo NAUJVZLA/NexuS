@@ -7,6 +7,7 @@
 CREATE TABLE IF NOT EXISTS negocios (
     id VARCHAR(100) PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL,
+    subdominio VARCHAR(100) UNIQUE,
     rut VARCHAR(50),
     direccion VARCHAR(255),
     plan_activo VARCHAR(100) DEFAULT 'Básico',
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     email VARCHAR(150) UNIQUE NOT NULL,
     nombre VARCHAR(150) NOT NULL,
     password VARCHAR(150) NOT NULL,
-    rol VARCHAR(50) DEFAULT 'admin' CHECK (rol IN ('admin', 'super_admin')),
+    rol VARCHAR(50) DEFAULT 'admin' CHECK (rol IN ('admin', 'super_admin', 'vendedor', 'mesero')),
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -33,17 +34,24 @@ BEGIN
         SELECT 1 FROM information_schema.columns 
         WHERE table_name='sedes' AND column_name='negocio_id'
     ) THEN
-        ALTER TABLE sedes ADD COLUMN negocio_id VARCHAR(100) REFERENCES negocios(id) ON DELETE CASCADE;
+        ALTER TABLE sedes ADD COLUMN negocio_id VARCHAR(100);
     END IF;
 END $$;
+
+-- Asegurar relaciones en Cascada (ON DELETE CASCADE)
+ALTER TABLE sedes DROP CONSTRAINT IF EXISTS sedes_negocio_id_fkey;
+ALTER TABLE sedes ADD CONSTRAINT sedes_negocio_id_fkey FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE;
+
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_negocio_id_fkey;
+ALTER TABLE usuarios ADD CONSTRAINT usuarios_negocio_id_fkey FOREIGN KEY (negocio_id) REFERENCES negocios(id) ON DELETE CASCADE;
 
 -- 4. Habilitar tiempo real para las nuevas tablas
 ALTER PUBLICATION supabase_realtime ADD TABLE negocios;
 ALTER PUBLICATION supabase_realtime ADD TABLE usuarios;
 
 -- 5. Sembrar un Negocio y Usuario administrador inicial de prueba (opcional)
-INSERT INTO negocios (id, nombre, rut, direccion, plan_activo, estado_suscripcion, fecha_vencimiento)
-VALUES ('negocio-defecto', 'Licorera & Bar NexuS', '901.234.567-1', 'Avenida Principal #102', 'Premium', 'ACTIVO', '2026-12-31')
+INSERT INTO negocios (id, nombre, subdominio, rut, direccion, plan_activo, estado_suscripcion, fecha_vencimiento)
+VALUES ('negocio-defecto', 'Licorera & Bar NexuS', 'alcobar', '901.234.567-1', 'Avenida Principal #102', 'Premium', 'ACTIVO', '2026-12-31')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO usuarios (id, negocio_id, email, nombre, password, rol)
@@ -54,3 +62,100 @@ ON CONFLICT (email) DO NOTHING;
 
 -- Asociar las sedes iniciales al negocio por defecto si existen
 UPDATE sedes SET negocio_id = 'negocio-defecto' WHERE negocio_id IS NULL;
+
+
+-- ==============================================================
+-- INTEGRACIÓN SUPABASE AUTH Y USUARIOS PÚBLICOS
+-- Trigger para sincronizar auth.users -> public.usuarios
+-- ==============================================================
+
+CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_nombre VARCHAR(150);
+    v_rol VARCHAR(50);
+    v_negocio_id VARCHAR(100);
+BEGIN
+    v_nombre := COALESCE(new.raw_user_meta_data->>'nombre', new.raw_user_meta_data->>'full_name', 'Nuevo Empleado');
+    v_rol := COALESCE(new.raw_user_meta_data->>'rol', 'mesero');
+    v_negocio_id := new.raw_user_meta_data->>'negocio_id';
+
+    INSERT INTO public.usuarios (id, negocio_id, email, nombre, password, rol)
+    VALUES (
+        new.id::text,
+        v_negocio_id,
+        new.email,
+        v_nombre,
+        'supabase-auth-managed',
+        v_rol
+    )
+    ON CONFLICT (email) DO UPDATE
+    SET 
+        id = new.id::text,
+        negocio_id = COALESCE(public.usuarios.negocio_id, v_negocio_id),
+        nombre = COALESCE(v_nombre, public.usuarios.nombre),
+        rol = COALESCE(v_rol, public.usuarios.rol);
+        
+    RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
+
+
+-- ==============================================================
+-- POLÍTICAS DE RLS PARA SAAS (NEGOCIOS Y USUARIOS)
+-- ==============================================================
+
+ALTER TABLE negocios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de Negocios
+CREATE POLICY "Negocios visibles por todos (para login/subdominio)" ON negocios
+    FOR SELECT USING (true);
+
+CREATE POLICY "Super Admins tienen control total sobre negocios" ON negocios
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM usuarios 
+            WHERE usuarios.id = auth.uid()::text AND usuarios.rol = 'super_admin'
+        )
+    );
+
+-- Políticas de Usuarios
+CREATE POLICY "Usuarios legibles por su propio negocio o super_admin" ON usuarios
+    FOR SELECT USING (
+        -- Si es super_admin
+        EXISTS (
+            SELECT 1 FROM usuarios 
+            WHERE usuarios.id = auth.uid()::text AND usuarios.rol = 'super_admin'
+        )
+        -- O si pertenece al mismo negocio
+        OR negocio_id = (
+            SELECT u.negocio_id FROM usuarios u 
+            WHERE u.id = auth.uid()::text
+        )
+    );
+
+CREATE POLICY "Super Admins y Admins locales editan usuarios" ON usuarios
+    FOR ALL USING (
+        -- Super Admin
+        EXISTS (
+            SELECT 1 FROM usuarios 
+            WHERE usuarios.id = auth.uid()::text AND usuarios.rol = 'super_admin'
+        )
+        -- Admin local del negocio
+        OR (
+            negocio_id = (
+                SELECT u.negocio_id FROM usuarios u 
+                WHERE u.id = auth.uid()::text
+            )
+            AND EXISTS (
+                SELECT 1 FROM usuarios u 
+                WHERE u.id = auth.uid()::text AND u.rol = 'admin'
+            )
+        )
+    );

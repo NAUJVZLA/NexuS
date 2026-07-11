@@ -1393,8 +1393,8 @@ export default function SuperAdminPage() {
                   <input
                     type="password"
                     required
-                    value={newAdminPassword}
-                    onChange={(e) => setNewAdminPassword(e.target.value)}
+                    value={updateAdminPassword}
+                    onChange={(e) => setUpdateAdminPassword(e.target.value)}
                     placeholder="Ej. admin2026*"
                     className="w-full h-9 px-3 rounded-lg glass-input text-xs text-white"
                   />
