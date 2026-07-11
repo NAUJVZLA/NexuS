@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { mockDb, Sede, Venta, Producto, CreditoCliente, CierreCaja, PrestamoBotella, getMockData, supabase, isMockMode, Negocio, Usuario } from '@/lib/supabaseClient';
+import { mockDb, Sede, Venta, Producto, CreditoCliente, CierreCaja, PrestamoBotella, getMockData, supabase, isMockMode, Negocio, Usuario, ensureDbInitialized } from '@/lib/supabaseClient';
 
 export default function SuperAdminPage() {
   const router = useRouter();
@@ -89,7 +89,10 @@ export default function SuperAdminPage() {
       return;
     }
 
-    loadData();
+    // Sincronizar e inicializar base de datos en caliente antes de cargar vista
+    ensureDbInitialized().then(() => {
+      loadData();
+    });
   }, [router]);
 
   const loadData = () => {

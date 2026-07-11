@@ -51,11 +51,12 @@ export const ensureDbInitialized = async () => {
           if (cierres.length > 0) memoryDb.cierres = cierres;
           if (auditoria.length > 0) memoryDb.auditoria = auditoria;
 
-          // Cargar negocios y usuarios de Supabase en caliente si estamos online
+          // Cargar negocios, usuarios y sedes de Supabase en caliente si estamos online
           if (!isMockMode && supabase) {
             try {
               const { data: negs, error: negErr } = await supabase.from('negocios').select('*');
               const { data: usrs, error: usrErr } = await supabase.from('usuarios').select('*');
+              const { data: sds, error: sdsErr } = await supabase.from('sedes').select('*');
               
               if (negs && !negErr) {
                 memoryDb.negocios = negs;
@@ -64,6 +65,14 @@ export const ensureDbInitialized = async () => {
               if (usrs && !usrErr) {
                 memoryDb.usuarios = usrs;
                 setLocalStorage('alico_usuarios', usrs);
+              }
+              if (sds && !sdsErr) {
+                memoryDb.sedes = sds;
+                setLocalStorage('alico_sedes', sds);
+                if (db) {
+                  await db.sedes.clear();
+                  await db.sedes.bulkAdd(sds);
+                }
               }
             } catch (syncSaasErr) {
               console.error("❌ [Alico SaaS Sync] Error cargando datos de SaaS de Supabase:", syncSaasErr);
