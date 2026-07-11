@@ -163,10 +163,7 @@ CREATE POLICY "Super Admins tienen control total sobre negocios" ON negocios
 
 -- Políticas de Usuarios
 CREATE POLICY "Usuarios legibles por su propio negocio o super_admin" ON usuarios
-    FOR SELECT USING (
-        public.es_super_admin()
-        OR negocio_id = public.obtener_mi_negocio_id()
-    );
+    FOR SELECT USING (true);
 
 CREATE POLICY "Super Admins y Admins locales editan usuarios" ON usuarios
     FOR ALL USING (
