@@ -57,7 +57,7 @@ INSERT INTO usuarios (id, negocio_id, email, nombre, password, rol)
 VALUES 
   ('usr-super', NULL, 'superadmin@alcobar.com', 'Juan Carlos Caridad', 'jccg2105@.**', 'super_admin'),
   ('usr-admin', 'negocio-defecto', 'admin@alcobar.com', 'Administrador', 'admin123', 'admin')
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password;
 
 -- Asociar las sedes iniciales al negocio por defecto si existen
 UPDATE sedes SET negocio_id = 'negocio-defecto' WHERE negocio_id IS NULL;
