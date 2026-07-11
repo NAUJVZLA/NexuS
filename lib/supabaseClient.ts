@@ -50,6 +50,25 @@ export const ensureDbInitialized = async () => {
           if (prestamos.length > 0) memoryDb.prestamos = prestamos;
           if (cierres.length > 0) memoryDb.cierres = cierres;
           if (auditoria.length > 0) memoryDb.auditoria = auditoria;
+
+          // Cargar negocios y usuarios de Supabase en caliente si estamos online
+          if (!isMockMode && supabase) {
+            try {
+              const { data: negs, error: negErr } = await supabase.from('negocios').select('*');
+              const { data: usrs, error: usrErr } = await supabase.from('usuarios').select('*');
+              
+              if (negs && !negErr) {
+                memoryDb.negocios = negs;
+                setLocalStorage('alico_negocios', negs);
+              }
+              if (usrs && !usrErr) {
+                memoryDb.usuarios = usrs;
+                setLocalStorage('alico_usuarios', usrs);
+              }
+            } catch (syncSaasErr) {
+              console.error("❌ [Alico SaaS Sync] Error cargando datos de SaaS de Supabase:", syncSaasErr);
+            }
+          }
           
           const uniqueCats = Array.from(new Set([
             'Cervezas', 'Licores', 'Vinos', 'Gaseosas', 'Comidas', 'Varios',
@@ -550,19 +569,19 @@ export const initializeDb = () => {
     const cats = getLocalStorage<string[]>('alico_categorias', ['Cervezas', 'Licores', 'Vinos', 'Gaseosas', 'Comidas', 'Varios']);
     categories.splice(0, categories.length, ...cats);
   } else {
-    // Supabase Mode: Inicializar con valores por defecto pero sin localStorage
-    memoryDb.negocios = INITIAL_NEGOCIOS;
-    memoryDb.usuarios = INITIAL_USUARIOS;
-    memoryDb.sedes = INITIAL_SEDES;
-    memoryDb.insumos = INITIAL_INSUMOS;
-    memoryDb.productos = INITIAL_PRODUCTS;
-    memoryDb.mesas = INITIAL_MESAS.map(m => ({ ...m, consumos: m.consumos || [] }));
-    memoryDb.movimientos = INITIAL_MOVIMIENTOS;
-    memoryDb.ventas = INITIAL_VENTAS;
-    memoryDb.creditos = INITIAL_CREDITOS;
-    memoryDb.prestamos = INITIAL_PRESTAMOS;
-    memoryDb.cierres = [];
-    memoryDb.auditoria = [];
+    // Supabase Mode: Inicializar leyendo de localStorage si existen, o fallbacks
+    memoryDb.negocios = getLocalStorage<Negocio[]>('alico_negocios', INITIAL_NEGOCIOS);
+    memoryDb.usuarios = getLocalStorage<Usuario[]>('alico_usuarios', INITIAL_USUARIOS);
+    memoryDb.sedes = getLocalStorage<Sede[]>('alico_sedes', INITIAL_SEDES);
+    memoryDb.insumos = getLocalStorage<Insumo[]>('alico_insumos', INITIAL_INSUMOS);
+    memoryDb.productos = getLocalStorage<Producto[]>('alico_productos', INITIAL_PRODUCTS);
+    memoryDb.mesas = getLocalStorage<Mesa[]>('alico_mesas', INITIAL_MESAS).map(m => ({ ...m, consumos: m.consumos || [] }));
+    memoryDb.movimientos = getLocalStorage<Movimiento[]>('alico_movimientos', INITIAL_MOVIMIENTOS);
+    memoryDb.ventas = getLocalStorage<Venta[]>('alico_ventas', INITIAL_VENTAS);
+    memoryDb.creditos = getLocalStorage<CreditoCliente[]>('alico_creditos', INITIAL_CREDITOS);
+    memoryDb.prestamos = getLocalStorage<PrestamoBotella[]>('alico_prestamos', INITIAL_PRESTAMOS);
+    memoryDb.cierres = getLocalStorage<CierreCaja[]>('alico_cierres', []);
+    memoryDb.auditoria = getLocalStorage<AuditLog[]>('alico_auditoria', []);
   }
 
   // Disparar carga asíncrona de IndexedDB a RAM
@@ -1007,6 +1026,10 @@ export const mockDb = {
     if (typeof window !== 'undefined') {
       setLocalStorage('alico_negocios', memoryDb.negocios);
     }
+    // Persistir en Supabase de forma asíncrona
+    runAsyncSupabase(async () => {
+      await supabase!.from('negocios').insert(newNeg);
+    });
     return newNeg;
   },
   updateNegocio: (negocioId: string, datos: Partial<Negocio>): Negocio | null => {
@@ -1017,6 +1040,10 @@ export const mockDb = {
       if (typeof window !== 'undefined') {
         setLocalStorage('alico_negocios', memoryDb.negocios);
       }
+      // Persistir en Supabase de forma asíncrona
+      runAsyncSupabase(async () => {
+        await supabase!.from('negocios').update(datos).eq('id', negocioId);
+      });
       return updated;
     }
     return null;
@@ -1065,6 +1092,10 @@ export const mockDb = {
           setLocalStorage('alico_auditoria', memoryDb.auditoria);
         }
       }
+      // Persistir en Supabase de forma asíncrona (el trigger ON DELETE CASCADE limpiará las tablas ligadas)
+      runAsyncSupabase(async () => {
+        await supabase!.from('negocios').delete().eq('id', negocioId);
+      });
       return true;
     }
     return false;
@@ -1165,6 +1196,10 @@ export const mockDb = {
     if (typeof window !== 'undefined') {
       setLocalStorage('alico_usuarios', memoryDb.usuarios);
     }
+    // Persistir en Supabase de forma asíncrona
+    runAsyncSupabase(async () => {
+      await supabase!.from('usuarios').insert(newUser);
+    });
     return newUser;
   },
   deleteUsuario: (id: string): boolean => {
@@ -1174,6 +1209,10 @@ export const mockDb = {
       if (typeof window !== 'undefined') {
         setLocalStorage('alico_usuarios', memoryDb.usuarios);
       }
+      // Persistir en Supabase de forma asíncrona
+      runAsyncSupabase(async () => {
+        await supabase!.from('usuarios').delete().eq('id', id);
+      });
       return true;
     }
     return false;
@@ -1186,6 +1225,10 @@ export const mockDb = {
       if (typeof window !== 'undefined') {
         setLocalStorage('alico_usuarios', memoryDb.usuarios);
       }
+      // Persistir en Supabase de forma asíncrona
+      runAsyncSupabase(async () => {
+        await supabase!.from('usuarios').update(datos).eq('id', id);
+      });
       return updated;
     }
     return null;
